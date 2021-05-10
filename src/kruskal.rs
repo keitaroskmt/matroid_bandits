@@ -1,5 +1,3 @@
-use std::collections::btree_set::Union;
-
 pub struct UnionFind {
     parent: Vec<usize>,
     rank: Vec<usize>,
@@ -54,27 +52,29 @@ impl UnionFind {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct Edge {
-    u: usize,
-    v: usize,
-    cost: i64,
+    pub u: usize,
+    pub v: usize,
+    pub cost: f64,
+    pub sample_num: i64,
 }
 
 impl Edge {
-    pub fn new(u: usize, v: usize, cost: i64) -> Edge {
+    pub fn new(u: usize, v: usize, cost: f64) -> Edge {
         Edge {
             u,
             v,
             cost,
+            sample_num: 0,
         }
     }
 }
 
-pub fn kruskal(n: usize, es: &mut Vec<Edge>) -> i64 {
-    es.sort_by(|s, t| t.cost.cmp(&s.cost));
+pub fn kruskal(n: usize, es: &mut Vec<Edge>) -> f64 {
+    es.sort_by(|s, t| s.cost.partial_cmp(&t.cost).unwrap()); 
     let mut uf = UnionFind::new(n);
-    let mut res: i64  = 0;
+    let mut res: f64  = 0.0;
     for e in es {
         if !uf.same(e.u, e.v) {
             uf.unite(e.u, e.v);
@@ -84,17 +84,37 @@ pub fn kruskal(n: usize, es: &mut Vec<Edge>) -> i64 {
     res
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn es_sort() {
-        let mut es = Vec::new();
-        es.push(Edge::new(0, 1, 2));
-        es.push(Edge::new(1, 2, 4));
-        es.push(Edge::new(0, 2, 3));
-        println!("{:?}", es);
-        es.sort_by(|s, t| t.cost.cmp(&s.cost)); 
-        println!("{:?}", es);
+// return the optimal base I using kruskal's algorithm
+pub fn optimal_base(n: usize, es: &mut Vec<(usize, Edge)>) -> Vec<usize> {
+    es.sort_by(|(_, s), (_, t)| s.cost.partial_cmp(&t.cost).unwrap()); 
+    let mut uf = UnionFind::new(n);
+    let mut ret = Vec::new();
+    for (i, e) in es {
+        if !uf.same(e.u, e.v) {
+            uf.unite(e.u, e.v);
+            ret.push(i.clone());
+        }
     }
+    ret
 }
+
+
+// use std::io::Read;
+// // AOJ GRL_2_A
+// fn main() {
+//     let mut buffer = String::new();
+//     std::io::stdin().read_to_string(&mut buffer).unwrap();
+//     let mut iter = buffer.split_whitespace();
+// 
+//     let V: usize = iter.next().unwrap().parse().unwrap();
+//     let E: usize = iter.next().unwrap().parse().unwrap();
+// 
+//     let mut edge: Vec<Edge> = (0..E).map(|_| Edge::new(
+//         iter.next().unwrap().parse().unwrap(),
+//         iter.next().unwrap().parse().unwrap(),
+//         iter.next().unwrap().parse().unwrap())
+//     ).collect();
+//     
+//     let res = kruskal(V, &mut edge);
+//     println!{"{}", res};
+// }
