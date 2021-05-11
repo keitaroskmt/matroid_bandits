@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+
+#[derive(Debug, Clone)]
 pub struct UnionFind {
     parent: Vec<usize>,
     rank: Vec<usize>,
@@ -85,14 +88,14 @@ pub fn kruskal(n: usize, es: &mut Vec<Edge>) -> f64 {
 }
 
 // return the optimal base I using kruskal's algorithm
-pub fn optimal_base(n: usize, es: &mut Vec<(usize, Edge)>) -> Vec<usize> {
+pub fn optimal_base(n: usize, es: &mut Vec<(usize, Edge)>) -> HashSet<usize> {
     es.sort_by(|(_, s), (_, t)| s.cost.partial_cmp(&t.cost).unwrap()); 
     let mut uf = UnionFind::new(n);
-    let mut ret = Vec::new();
+    let mut ret = HashSet::new();
     for (i, e) in es {
         if !uf.same(e.u, e.v) {
             uf.unite(e.u, e.v);
-            ret.push(i.clone());
+            ret.insert(i.clone());
         }
     }
     ret
