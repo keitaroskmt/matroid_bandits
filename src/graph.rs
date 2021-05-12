@@ -74,8 +74,9 @@ impl Edge {
     }
 }
 
+// the maximum spanning tree
 pub fn kruskal(n: usize, es: &mut Vec<Edge>) -> f64 {
-    es.sort_by(|s, t| s.cost.partial_cmp(&t.cost).unwrap()); 
+    es.sort_by(|s, t| t.cost.partial_cmp(&s.cost).unwrap()); 
     let mut uf = UnionFind::new(n);
     let mut res: f64  = 0.0;
     for e in es {
@@ -89,7 +90,7 @@ pub fn kruskal(n: usize, es: &mut Vec<Edge>) -> f64 {
 
 // return the optimal base I using kruskal's algorithm
 pub fn optimal_base(n: usize, es: &mut Vec<(usize, Edge)>) -> HashSet<usize> {
-    es.sort_by(|(_, s), (_, t)| s.cost.partial_cmp(&t.cost).unwrap()); 
+    es.sort_by(|(_, s), (_, t)| t.cost.partial_cmp(&s.cost).unwrap()); 
     let mut uf = UnionFind::new(n);
     let mut ret = HashSet::new();
     for (i, e) in es {

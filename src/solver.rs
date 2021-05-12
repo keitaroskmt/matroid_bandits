@@ -12,14 +12,17 @@ pub struct GenerateReward {
 impl GenerateReward {
     pub fn new() -> GenerateReward {
         GenerateReward {
-            std_dev: 1.0,
+            std_dev: 10.0,
         }
     }
     
-    pub fn sample(&self, graph: &Vec<Vec<f64>>, e: &mut Edge) -> f64 {
+    pub fn sample(&self, graph: &Vec<Vec<f64>>, e: &mut Edge, num: i64) -> f64 {
         let mean = graph[e.u][e.v]; 
         let normal = Normal::new(mean, self.std_dev).unwrap();
-        let ret = normal.sample(&mut rand::thread_rng());
+        let mut ret = 0.;
+        for _ in 0..num {
+            ret += normal.sample(&mut rand::thread_rng());
+        }
         ret
     }
 }
@@ -36,12 +39,38 @@ impl Solver {
     pub fn new(graph: Vec<Vec<f64>>, es: Vec<Edge>) -> Solver {
         let rank = Solver::calculate_rank(&es);
         let generate_reward = GenerateReward::new();
-        Solver {
+        let mut ret = Solver {
             graph,
             es,
             rank,
             generate_reward,
+        };
+        
+        ret.init();
+        ret
+    }
+
+    pub fn init(&mut self) {
+        for e in &mut self.es {
+            e.cost = 0.;
+            e.sample_num = 0;
         }
+    }
+    
+    pub fn sample_total(&self) -> i64 {
+        let mut total = 0;
+        for &e in &self.es {
+            total += e.sample_num;
+        }
+        total
+    }
+    
+    pub fn cost_diff(&self) -> Vec<f64> {
+        let mut ret = Vec::new();
+        for &e in &self.es {
+            ret.push(e.cost - self.graph[e.u][e.v]);
+        }
+        ret
     }
     
     pub fn calculate_rank(es: &[Edge]) -> i64 {
@@ -63,6 +92,26 @@ impl Solver {
         (vs.len() - st.len()) as i64
     }
     
+    pub fn uniform_sample(&mut self, S: &HashSet<usize>, error_bound: f64, delta: f64) {
+        for &i in S {
+            let e = &mut self.es[i];
+            let number = (error_bound.powi(-2) * (2.0 * delta.powi(-1)).ln() / 2.0) as i64;
+            let value_sum = self.generate_reward.sample(&self.graph, e, number);
+            e.cost = (e.sample_num as f64 * e.cost + value_sum) / (e.sample_num + number) as f64;
+            e.sample_num += number;
+        }
+    }
+    
+    pub fn naive_i(&mut self, S: &HashSet<usize>, error_bound: f64, delta: f64) -> HashSet<usize> {
+        self.uniform_sample(S, error_bound / 2.0, delta / (S.len() as f64));
+        
+        let mut es = Vec::new();
+        for &i in S {
+            es.push((i, self.es[i]));
+        }
+        optimal_base(self.es.len(), &mut es)
+    }
+    
     pub fn f_good_edges(&mut self, base_set: &HashSet<usize>, base: &HashSet<usize>, geta: f64) -> HashSet<usize> {
         // ret = {e \in base_set : base^{\geq mu_e + geta} does not block e}
         let mut ret = HashSet::new();
@@ -74,7 +123,7 @@ impl Solver {
         let mut base_vec = base.into_iter().copied().collect::<Vec<usize>>();
         base_vec.sort_by(|&i, &j| self.es[j].cost.partial_cmp(&self.es[i].cost).unwrap());
 
-        let mut uf = UnionFind::new(base_set.len());
+        let mut uf = UnionFind::new(self.es.len());
         let mut now = 0;
         for &i in &base_set_vec {
             while now < base.len() && self.es[base_vec[now]].cost >= self.es[i].cost + geta {
@@ -87,28 +136,6 @@ impl Solver {
         }
         
         ret
-    }
-    
-    pub fn uniform_sample(&mut self, S: &HashSet<usize>, error_bound: f64, delta: f64) {
-        for &i in S {
-            let e = &mut self.es[i];
-            let number = (error_bound.powi(-2) * (2.0 * delta.powi(-1)).ln() / 2.0) as i64;
-            for _ in 0..number {
-                let value = self.generate_reward.sample(&self.graph, e);
-                e.cost = (e.sample_num as f64 * e.cost + value) / (e.sample_num + 1) as f64;
-                e.sample_num += 1;
-            }
-        }
-    }
-    
-    pub fn naive_i(&mut self, S: &HashSet<usize>, error_bound: f64, delta: f64) -> HashSet<usize> {
-        self.uniform_sample(S, error_bound / 2.0, delta / (S.len() as f64));
-        
-        let mut es = Vec::new();
-        for &i in S {
-            es.push((i, self.es[i]));
-        }
-        optimal_base(es.len(), &mut es)
     }
     
     pub fn pac_sampleprune(&mut self, S: &HashSet<usize>, error_bound: f64, delta: f64) -> HashSet<usize> {
@@ -139,10 +166,10 @@ impl Solver {
         self.pac_sampleprune(&s_next, alpha, delta / 4.0)
     }
     
-    pub fn exact_expgap(&mut self, S: HashSet<usize>, error_bound: f64, delta: f64) -> HashSet<usize> {
+    pub fn exact_expgap(&mut self, S: &HashSet<usize>, error_bound: f64, delta: f64) -> HashSet<usize> {
         let mut r_elim = 1;
         let mut r_sele = 1;
-        let mut s_cur = S;
+        let mut s_cur = S.clone();
         let mut res = HashSet::new();
         loop {
             let mut es_cur = Vec::new();
@@ -151,6 +178,8 @@ impl Solver {
             }
             let n_opt = Solver::calculate_rank(&es_cur);
             let n_bad = s_cur.len() as i64 - n_opt;
+            println!("n_opt {:?}", n_opt);
+            println!("n_bad {:?}", n_bad);
             
             if n_opt <= n_bad {
                 if n_opt == 0 {
@@ -168,7 +197,6 @@ impl Solver {
                 
                 let mut s_new = self.f_good_edges(&s_minus_i, &I, 1.5 * eps_r);
                 s_new = s_new.union(&I).copied().collect::<HashSet<usize>>();
-                todo!();
                 s_cur = s_cur.intersection(&s_new).copied().collect::<HashSet<usize>>();
 
             } else {
@@ -189,7 +217,7 @@ impl Solver {
                 let mut s_cur_vec = s_cur.clone().into_iter().collect::<Vec<usize>>();
                 s_cur_vec.sort_by(|&i, &j| self.es[j].cost.partial_cmp(&self.es[i].cost).unwrap());
                 
-                let mut uf = UnionFind::new(s_cur.len());
+                let mut uf = UnionFind::new(self.es.len());
                 let mut now = 0;
                 for &i in &s_cur_vec {
                     while now < s_cur.len() && self.es[s_cur_vec[now]].cost > self.es[i].cost {
@@ -214,10 +242,26 @@ impl Solver {
                     now = now_backup;
                     
                     res = res.union(&U).copied().collect::<HashSet<usize>>();
-                    s_cur = s_cur.difference(&U).copied().collect::<HashSet<usize>>();
+                    s_cur = self.matroid_contraction(&s_cur, &U);
                 }
             }
         }
         res
+    }
+    
+    pub fn matroid_contraction(&self, s: &HashSet<usize>, t: &HashSet<usize>) -> HashSet<usize> {
+        let mut uf = UnionFind::new(self.es.len());
+        for &e in t {
+            uf.unite(self.es[e].u, self.es[e].v);
+        }
+
+        let mut ret = HashSet::new();
+        for &e in s {
+            if !uf.same(self.es[e].u, self.es[e].v) {
+                ret.insert(e);
+            }
+        }
+        
+        ret
     }
 }
