@@ -16,10 +16,11 @@ fn vec_eq(va: &[usize], vb: &[usize]) -> bool {
 
 
 // give a large weight to only one spanning tree
-// Chen et al.(2014) can return optimal solution in one loop.
+// CLUCB can return optimal solution in one loop.
 fn compare_sample1() {
     let n = 100;
     for &p in &[0.1, 0.3, 0.5, 0.7, 0.9] {
+        println!("\n------------");
         let mut graph = vec![vec![0.; n]; n];
         let mut es = Vec::new();
         for i in 0..n-1 {
@@ -53,36 +54,39 @@ fn compare_sample1() {
         let delta = 0.1;
         
         // Chen, Lin, King, Lyu and Chen(2014)
+        println!("-- CLUCB");
         let mut clucb_res = solver.clucb(&S, delta).into_iter().collect::<Vec<usize>>();
         clucb_res.sort();
 
         let sample_total = solver.sample_total();
-        println!("1. sample_total {:?} when p = {:?}", sample_total, p);
+        println!("sample_total {:?} when p = {:?}", sample_total, p);
         if vec_eq(&optimal, &clucb_res) {
-            println!("1. Correct")
+            println!("Correct")
         } else {
-            println!("1. Wrong")
+            println!("Wrong")
         }
         
         solver.init();
         // Chen, Gupta, and Li (2016)
+        println!("\n-- Exact-ExpGap");
         let mut exact_res = solver.exact_expgap(&S, error_bound, delta).into_iter().collect::<Vec<usize>>();
+        exact_res.sort();
         let sample_total = solver.sample_total();
-        println!("2. sample_total {:?} when p = {:?}", sample_total, p);
+        println!("sample_total {:?} when p = {:?}", sample_total, p);
         if vec_eq(&optimal, &exact_res) {
-            println!("2. Correct")
+            println!("Correct")
         } else {
-            println!("2. Wrong")
+            println!("Wrong")
         }
     }
 }
 
 // give randomized weight to edge
-// Chen et al. (2016) returns optimal solution quickly.
+// Exact-ExpGap returns optimal solution quickly.
 fn compare_sample2() {
     let n = 100;
-    //for &p in &[0.1, 0.3, 0.5, 0.7, 0.9] {
-    for &p in &[0.9] {
+    for &p in &[0.1, 0.3, 0.5, 0.7, 0.9] {
+        println!("\n------------");
         let mut graph = vec![vec![0.; n]; n];
         let mut es = Vec::new();
         let mut rng = rand::thread_rng();
@@ -112,27 +116,29 @@ fn compare_sample2() {
         let delta = 0.1;
         
         // Chen, Lin, King, Lyu and Chen(2014)
+        println!("-- CLUCB");
         let mut clucb_res = solver.clucb(&S, delta).into_iter().collect::<Vec<usize>>();
         clucb_res.sort();
 
         let sample_total = solver.sample_total();
-        println!("1. sample_total {:?} when p = {:?}", sample_total, p);
+        println!("sample_total {:?} when dencity = {:?}", sample_total, p);
         if vec_eq(&optimal, &clucb_res) {
-            println!("1. Correct")
+            println!("Correct")
         } else {
-            println!("1. Wrong")
+            println!("Wrong")
         }
         
         solver.init();
         // Chen, Gupta, and Li (2016)
+        println!("\n-- Exact-ExpGap");
         let mut exact_res = solver.exact_expgap(&S, error_bound, delta).into_iter().collect::<Vec<usize>>();
         exact_res.sort();
         let sample_total = solver.sample_total();
-        println!("2. sample_total {:?} when p = {:?}", sample_total, p);
+        println!("sample_total {:?} when dencity = {:?}", sample_total, p);
         if vec_eq(&optimal, &exact_res) {
-            println!("2. Correct")
+            println!("Correct")
         } else {
-            println!("2. Wrong")
+            println!("Wrong")
         }
     }
 }

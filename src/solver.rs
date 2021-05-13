@@ -178,8 +178,7 @@ impl Solver {
             }
             let n_opt = Solver::calculate_rank(&es_cur);
             let n_bad = s_cur.len() as i64 - n_opt;
-            println!("n_opt {:?}", n_opt);
-            println!("n_bad {:?}", n_bad);
+            println!("n_opt: {:?}, n_bad: {:?}", n_opt, n_bad);
             
             if n_opt <= n_bad {
                 if n_opt == 0 {
