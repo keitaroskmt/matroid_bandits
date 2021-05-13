@@ -14,8 +14,10 @@ fn vec_eq(va: &[usize], vb: &[usize]) -> bool {
         va.iter().zip(vb).all(|(&a, &b)| a == b)
 }
 
-fn samplenum_with_n() {
-    // make sure the number of samples isn't relevent to matroid size
+
+// give a large weight to only one spanning tree
+// Chen et al.(2014) can return optimal solution in one loop.
+fn compare_sample1() {
     let n = 100;
     for &p in &[0.1, 0.3, 0.5, 0.7, 0.9] {
         let mut graph = vec![vec![0.; n]; n];
@@ -23,7 +25,7 @@ fn samplenum_with_n() {
         for i in 0..n-1 {
             graph[i][i+1] = 10000.;
             graph[i+1][i] = 10000.;
-            es.push(Edge::new(i, i+1, 10000.));
+            es.push(Edge::new(i, i+1, 1000.));
         }
         
         let mut rng = rand::thread_rng();
@@ -36,6 +38,13 @@ fn samplenum_with_n() {
                 }
             }
         }
+        // optimal
+        let mut es_idx = Vec::new();
+        for (i, e) in es.iter().enumerate() {
+            es_idx.push((i, e.clone()));
+        }
+        let mut optimal = optimal_base(n, &mut es_idx).into_iter().collect::<Vec<usize>>();
+        optimal.sort();
         
         let size = es.len();
         let mut solver = Solver::new(graph, es);
@@ -43,14 +52,94 @@ fn samplenum_with_n() {
         let error_bound = 1.;
         let delta = 0.1;
         
-        let mut exact_res = solver.exact_expgap(&S, error_bound, delta);
+        // Chen, Lin, King, Lyu and Chen(2014)
+        let mut clucb_res = solver.clucb(&S, delta).into_iter().collect::<Vec<usize>>();
+        clucb_res.sort();
+
         let sample_total = solver.sample_total();
-        println!("sample_total {:?} when p = {:?}", sample_total, p);
+        println!("1. sample_total {:?} when p = {:?}", sample_total, p);
+        if vec_eq(&optimal, &clucb_res) {
+            println!("1. Correct")
+        } else {
+            println!("1. Wrong")
+        }
+        
+        solver.init();
+        // Chen, Gupta, and Li (2016)
+        let mut exact_res = solver.exact_expgap(&S, error_bound, delta).into_iter().collect::<Vec<usize>>();
+        let sample_total = solver.sample_total();
+        println!("2. sample_total {:?} when p = {:?}", sample_total, p);
+        if vec_eq(&optimal, &exact_res) {
+            println!("2. Correct")
+        } else {
+            println!("2. Wrong")
+        }
+    }
+}
+
+// give randomized weight to edge
+// Chen et al. (2016) returns optimal solution quickly.
+fn compare_sample2() {
+    let n = 100;
+    //for &p in &[0.1, 0.3, 0.5, 0.7, 0.9] {
+    for &p in &[0.9] {
+        let mut graph = vec![vec![0.; n]; n];
+        let mut es = Vec::new();
+        let mut rng = rand::thread_rng();
+        for i in 0..n {
+            for j in i+1..n {
+                if rng.gen_range(0.0..1.0) <= p {
+                    let val = rng.gen_range(0.0..100000.0);
+                    graph[i][j] = val;
+                    graph[j][i] = val;
+                    es.push(Edge::new(i, j, val));
+                }
+            }
+        }
+
+        // optimal
+        let mut es_idx = Vec::new();
+        for (i, e) in es.iter().enumerate() {
+            es_idx.push((i, e.clone()));
+        }
+        let mut optimal = optimal_base(n, &mut es_idx).into_iter().collect::<Vec<usize>>();
+        optimal.sort();
+        
+        let size = es.len();
+        let mut solver = Solver::new(graph, es);
+        let S = (0..size).collect::<HashSet<usize>>();
+        let error_bound = 1.;
+        let delta = 0.1;
+        
+        // Chen, Lin, King, Lyu and Chen(2014)
+        let mut clucb_res = solver.clucb(&S, delta).into_iter().collect::<Vec<usize>>();
+        clucb_res.sort();
+
+        let sample_total = solver.sample_total();
+        println!("1. sample_total {:?} when p = {:?}", sample_total, p);
+        if vec_eq(&optimal, &clucb_res) {
+            println!("1. Correct")
+        } else {
+            println!("1. Wrong")
+        }
+        
+        solver.init();
+        // Chen, Gupta, and Li (2016)
+        let mut exact_res = solver.exact_expgap(&S, error_bound, delta).into_iter().collect::<Vec<usize>>();
+        exact_res.sort();
+        let sample_total = solver.sample_total();
+        println!("2. sample_total {:?} when p = {:?}", sample_total, p);
+        if vec_eq(&optimal, &exact_res) {
+            println!("2. Correct")
+        } else {
+            println!("2. Wrong")
+        }
     }
 }
 
 fn main() {
-    samplenum_with_n();
+    compare_sample1();
+    compare_sample2();
 }
 
 #[cfg(test)]
@@ -326,4 +415,52 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_clucb() {
+        // setting
+        let n = 100;
+        let mut graph = vec![vec![0.; n]; n];
+        let mut es = Vec::new();
+        let mut rng = rand::thread_rng();
+        for i in 0..n {
+            for j in i+1..n {
+                if rng.gen_range(0.0..1.0) <= 0.8 {
+                    let val = rng.gen_range(0.0..100000.0);
+                    graph[i][j] = val;
+                    graph[j][i] = val;
+                    es.push(Edge::new(i, j, val));
+                }
+            }
+        }
+        
+        // optimal
+        let mut es_idx = Vec::new();
+        for (i, e) in es.iter().enumerate() {
+            es_idx.push((i, e.clone()));
+        }
+        let mut optimal = optimal_base(n, &mut es_idx).into_iter().collect::<Vec<usize>>();
+        optimal.sort();
+        
+
+        let size = es.len();
+        let mut solver = Solver::new(graph, es);
+        let S = (0..size).collect::<HashSet<usize>>();
+        let delta = 0.1;
+
+        println!("CLUCB");
+
+        let mut clucb_res = solver.clucb(&S,delta).into_iter().collect::<Vec<usize>>();
+        clucb_res.sort();
+        
+        let sample_total = solver.sample_total();
+        println!("sample_total {:?}", sample_total);
+        let cost_diff = solver.cost_diff();
+        println!("max cost_diff {:?}", cost_diff.iter().fold(0./0., |s, t| t.max(s)));
+
+        if vec_eq(&optimal, &clucb_res) {
+            println!("Correct")
+        } else {
+            println!("Wrong")
+        }
+    }
 }

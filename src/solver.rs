@@ -6,13 +6,13 @@ use super::graph::*;
 
 #[derive(Debug)]
 pub struct GenerateReward {
-    std_dev: f64,
+    pub std_dev: f64,
 }
 
 impl GenerateReward {
     pub fn new() -> GenerateReward {
         GenerateReward {
-            std_dev: 10.0,
+            std_dev: 1.0,
         }
     }
     
@@ -264,4 +264,66 @@ impl Solver {
         
         ret
     }
+    
+    pub fn clucb(&mut self, S: &HashSet<usize>, delta: f64) -> HashSet<usize> {
+        for &i in S {
+            let e = &mut self.es[i];
+            let val = self.generate_reward.sample(&self.graph, e, 1);
+            e.cost = val;
+            e.sample_num += 1;
+        }
+        
+        let mut t = S.len() - 1;
+        loop {
+            t += 1;
+
+            let mut es = Vec::new();
+            for &i in S {
+                es.push((i, self.es[i]));
+            }
+            let mt = optimal_base(S.len(), &mut es);
+            
+            let mut rads = vec![0.; S.len()];
+            for &i in S {
+                rads[i] = self.generate_reward.std_dev * (2.0 * (4.0 * S.len() as f64 * t as f64 / delta).ln() / self.es[i].sample_num as f64).sqrt();
+                
+                if mt.contains(&i) {
+                    self.es[i].cost -= rads[i];
+                } else {
+                    self.es[i].cost += rads[i];
+                }
+            }
+            println!("loop: {:?}, rad: {:?}", t, rads[0]);
+            
+            let mut es = Vec::new();
+            for &i in S {
+                es.push((i, self.es[i]));
+            }
+            let mt_new = optimal_base(self.es.len(), &mut es);
+            
+            if set_eq(&mt, &mt_new) {
+                return mt;
+            }
+            
+            
+            let mut next_arm = 0;
+            let mut mx = 0.;
+            for &i in mt.symmetric_difference(&mt_new) {
+                if mx > rads[i] {
+                    mx = rads[i];
+                    next_arm = i;
+                }
+            }
+            
+            let e = &mut self.es[next_arm];
+            let val = self.generate_reward.sample(&self.graph, e, 1);
+            e.cost = (e.cost * e.sample_num as f64 + val) / (e.sample_num + 1) as f64;
+            e.sample_num += 1; 
+        }
+    }
+}
+
+fn set_eq(sa: &HashSet<usize>, sb: &HashSet<usize>) -> bool {
+    (sa.len() == sb.len()) &&
+        sa.iter().all(|i| sb.contains(i))
 }
